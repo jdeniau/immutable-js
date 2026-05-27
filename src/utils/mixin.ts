@@ -9,10 +9,11 @@ export default function mixin<C extends Constructor>(
   methods: Record<string, Function>
 ): C {
   const keyCopier = (key: string | symbol): void => {
+    if (key === 'constructor') return;
     // @ts-expect-error how to handle symbol ?
     ctor.prototype[key] = methods[key];
   };
-  Object.keys(methods).forEach(keyCopier);
+  Object.getOwnPropertyNames(methods).forEach(keyCopier);
   // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- TODO enable eslint here
   Object.getOwnPropertySymbols &&
     Object.getOwnPropertySymbols(methods).forEach(keyCopier);
