@@ -173,8 +173,5 @@
       "import": "{ Seq }",
       "limit": "20 kB"
     }
-  ],
-  "dependencies": {
-    "dpdm": "^4.2.0"
-  }
+  ]
 }
