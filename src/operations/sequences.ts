@@ -143,7 +143,8 @@ export class ToIndexedSequence<T> extends IndexedSeqImpl<T> {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- TODO enable eslint here
     reverse && ensureSize(this);
     return this._iter.__iterate(
-      (v) => fn(v, reverse ? (this.size ?? 0) - ++i : i++, this),
+      // `ensureSize` fixed `size` above whenever `reverse` is set.
+      (v) => fn(v, reverse ? this.size! - ++i : i++, this),
       reverse
     );
   }
@@ -178,7 +179,8 @@ export class ToIndexedSequence<T> extends IndexedSeqImpl<T> {
         ? step
         : iteratorValue(
             type,
-            reverse ? (this.size ?? 0) - ++i : i++,
+            // `ensureSize` fixed `size` above whenever `reverse` is set.
+            reverse ? this.size! - ++i : i++,
             step.value,
             step
           );
@@ -369,9 +371,19 @@ class ConcatSeq extends SeqImpl<unknown, unknown> {
       [IS_INDEXED_SYMBOL]?: boolean;
       [IS_ORDERED_SYMBOL]?: boolean;
     };
-    this[IS_KEYED_SYMBOL] = first[IS_KEYED_SYMBOL];
-    this[IS_INDEXED_SYMBOL] = first[IS_INDEXED_SYMBOL];
-    this[IS_ORDERED_SYMBOL] = first[IS_ORDERED_SYMBOL];
+    // Copy only the brands the first iterable actually carries: assigning
+    // `undefined` would still create own properties, which an `in`-based
+    // predicate check (planned for 6.0, see isOrdered.ts) would read as
+    // branded.
+    if (first[IS_KEYED_SYMBOL] !== undefined) {
+      this[IS_KEYED_SYMBOL] = first[IS_KEYED_SYMBOL];
+    }
+    if (first[IS_INDEXED_SYMBOL] !== undefined) {
+      this[IS_INDEXED_SYMBOL] = first[IS_INDEXED_SYMBOL];
+    }
+    if (first[IS_ORDERED_SYMBOL] !== undefined) {
+      this[IS_ORDERED_SYMBOL] = first[IS_ORDERED_SYMBOL];
+    }
   }
 
   // Arrow fields (not methods): the base declares the uncached hooks as
@@ -475,10 +487,9 @@ export function concatFactory(
           : indexedSeqFromValue(Array.isArray(v) ? v : [v]);
       }
       if (isKeyedCollection) {
-        // TODO [TS-MIGRATION] the base collection type is not statically
-        // iterable yet ([Symbol.iterator] still lives in the mixin), while
-        // `KeyedCollection` only accepts iterables of entries.
-        return KeyedCollection(v as unknown as Iterable<[unknown, unknown]>);
+        // TODO [TS-MIGRATION] the base collection statically yields `unknown`,
+        // while `KeyedCollection` only accepts iterables of entries.
+        return KeyedCollection(v as Iterable<[unknown, unknown]>);
       }
       return v;
     })

@@ -130,7 +130,7 @@ export class CollectionImpl<K, V> implements ValueObject {
       // TODO [TS-MIGRATION] the optimized round-trip returns the source seq,
       // which is keyed only when the source is keyed; the public contract
       // types `fromEntrySeq` as a keyed seq.
-      this.toSeq() as unknown as KeyedSeqImpl<unknown, unknown>;
+      this.toSeq() as KeyedSeqImpl<unknown, unknown>;
     return entriesSequence;
   }
 
@@ -1529,9 +1529,9 @@ export class SetCollectionImpl<T> extends CollectionImpl<T, T> {
    * to determine equality
    */
   override has(key: T): boolean {
-    // The base `includes` body: Set's own `includes` delegates to `has`, so
-    // it cannot be reused here.
-    return this.some((value) => is(value, key));
+    // `this.includes` would recurse (Set's own `includes` delegates to
+    // `has`); the base `includes` is the semantics we want.
+    return super.includes(key);
   }
 
   /**
