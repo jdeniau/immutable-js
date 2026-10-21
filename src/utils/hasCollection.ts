@@ -1,5 +1,5 @@
 import type { Collection } from '../../type-definitions/immutable';
-import { hash } from '../Hash';
+import { hash, hashCollisionKey } from '../Hash';
 import { imul, smi } from '../Math';
 import { isKeyed } from '../predicates/isKeyed';
 import { isOrdered } from '../predicates/isOrdered';
@@ -49,4 +49,47 @@ function murmurHashOfSize(size: number, h: number): number {
 
 function hashMerge(a: number, b: number): number {
   return (a ^ (b + 0x9e3779b9 + (a << 6) + (a >> 2))) | 0; // int
+}
+
+/**
+ * Structural counterpart of `hashCollection()` for the secondary hash of
+ * `HashCollisionNode` (see `hashCollisionKey()`): same folding, but every key
+ * and value is hashed with the seeded `hashCollisionKey()` instead of the
+ * public `hash()`. Collections that are `equals()` therefore get the same
+ * result, while collections that only collide under `hash()` are scattered.
+ */
+export function hashCollisionCollection<K, V>(
+  collection: Collection<K, V>
+): number {
+  // @ts-expect-error Migrate to CollectionImpl in v6
+  if (collection.size === Infinity) {
+    return 0;
+  }
+  const ordered = isOrdered(collection);
+  const keyed = isKeyed(collection);
+  let h: number = ordered ? 1 : 0;
+
+  // @ts-expect-error Migrate to CollectionImpl in v6
+  collection.__iterate(
+    keyed
+      ? ordered
+        ? (v: V, k: K): void => {
+            h =
+              (31 * h + hashMerge(hashCollisionKey(v), hashCollisionKey(k))) |
+              0;
+          }
+        : (v: V, k: K): void => {
+            h = (h + hashMerge(hashCollisionKey(v), hashCollisionKey(k))) | 0;
+          }
+      : ordered
+        ? (v: V): void => {
+            h = (31 * h + hashCollisionKey(v)) | 0;
+          }
+        : (v: V): void => {
+            h = (h + hashCollisionKey(v)) | 0;
+          }
+  );
+
+  // @ts-expect-error Migrate to CollectionImpl in v6
+  return murmurHashOfSize(collection.size, h);
 }

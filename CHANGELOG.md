@@ -8,6 +8,8 @@ Dates are formatted as YYYY-MM-DD.
 
 ## Unreleased
 
+- fix(Map): the seeded index that guards large hash-collision buckets now also scatters number, `valueOf()`-based (e.g. `Date`), bigint, Immutable collection and Record keys, which previously fell back to a linear scan (O(n²) build and reads on crafted input). Follow-up to GHSA-xvcm-6775-5m9r. Custom value objects whose `hashCode()` collides still scan linearly, as the library has no other information about them.
+
 ## 5.1.9
 
 - fix(List): a `List` grown past 32 elements while all its values are `undefined` no longer reads those values back as `null` (affected `get`, iteration, `toArray`, `equals` and `hashCode`)

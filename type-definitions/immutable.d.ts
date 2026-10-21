@@ -4465,6 +4465,14 @@ declare namespace Immutable {
      * to be equal][Hash Collision]. If two values have different `hashCode`s,
      * they must not be equal.
      *
+     * Note: `hashCode()` should also distribute well. Colliding keys are kept
+     * in one bucket, so a custom `hashCode()` that maps many distinct values
+     * to the same number degrades `Map` and `Set` operations on those keys to
+     * linear scans. Immutable.js guards its own key types (strings, numbers,
+     * collections, Records) against crafted collisions, but cannot do so for
+     * a custom `hashCode()`. For keys built from untrusted input, prefer a
+     * `Record` or a `List` over a hand-written value object.
+     *
      * Note: `hashCode()` is not guaranteed to always be called before
      * `equals()`. Most but not all Immutable.js collections use hash codes to
      * organize their internal data structures, while all Immutable.js

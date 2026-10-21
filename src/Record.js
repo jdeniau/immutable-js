@@ -20,6 +20,7 @@ import { withMutations } from './methods/withMutations';
 import { isImmutable } from './predicates/isImmutable';
 import { IS_RECORD_SYMBOL, isRecord } from './predicates/isRecord';
 import { toJS } from './toJS';
+import { hashCollisionCollection } from './utils/hasCollection';
 import invariant from './utils/invariant';
 import quoteString from './utils/quoteString';
 
@@ -129,6 +130,15 @@ export class Record {
 
   hashCode() {
     return recordSeq(this).hashCode();
+  }
+
+  // Seeded secondary hash for `HashCollisionNode` (see `hashCollisionKey`).
+  // Only structural when `equals()` is the structural one: a subclass that
+  // redefines equality must fall back to the (constant) `hashCode()`.
+  __collisionHashCode() {
+    return this.equals === RecordPrototype.equals
+      ? hashCollisionCollection(recordSeq(this))
+      : this.hashCode();
   }
 
   // @pragma Access

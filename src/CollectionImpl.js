@@ -70,7 +70,7 @@ import { toJS } from './toJS';
 import arrCopy from './utils/arrCopy';
 import assertNotInfinite from './utils/assertNotInfinite';
 import deepEqual from './utils/deepEqual';
-import { hashCollection } from './utils/hasCollection';
+import { hashCollection, hashCollisionCollection } from './utils/hasCollection';
 import mixin from './utils/mixin';
 import quoteString from './utils/quoteString';
 
@@ -486,6 +486,15 @@ mixin(Collection, {
 
   hashCode() {
     return this.__hash || (this.__hash = hashCollection(this));
+  },
+
+  // Seeded secondary hash for `HashCollisionNode` (see `hashCollisionKey`).
+  // Only structural when `equals()` is the structural one: a subclass that
+  // redefines equality must fall back to the (constant) `hashCode()`.
+  __collisionHashCode() {
+    return this.equals === CollectionPrototype.equals
+      ? hashCollisionCollection(this)
+      : this.hashCode();
   },
 
   // ### Internal

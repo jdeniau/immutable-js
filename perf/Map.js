@@ -171,5 +171,37 @@ describe('Map', function () {
         }
       });
     });
+
+    // Every `x.5` number shares the same hash(), and so does every List built
+    // from one colliding string: non-string keys land in the same node.
+    [1024, 4096].forEach((n) => {
+      const numbers = [];
+      const lists = [];
+      for (let ii = 0; ii < n; ii++) {
+        numbers.push(ii + 0.5);
+      }
+      const strings = collisionKeys(Math.log2(n));
+      for (let ii = 0; ii < strings.length; ii++) {
+        lists.push(Immutable.List([strings[ii]]));
+      }
+      const numberSet = Immutable.Set(numbers);
+      const listMap = Immutable.Map(lists.map((l, ii) => [l, ii]));
+
+      it('builds a Set of ' + n + ' colliding numbers', () => {
+        Immutable.Set(numbers);
+      });
+
+      it('reads ' + n + ' colliding numbers', () => {
+        for (let ii = 0; ii < n; ii++) {
+          numberSet.has(numbers[ii]);
+        }
+      });
+
+      it('reads ' + n + ' colliding List keys', () => {
+        for (let ii = 0; ii < n; ii++) {
+          listMap.get(lists[ii]);
+        }
+      });
+    });
   });
 });

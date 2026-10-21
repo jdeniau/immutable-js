@@ -1,4 +1,4 @@
-import { smi } from './Math';
+import { imul, smi } from './Math';
 
 const defaultValueOf = Object.prototype.valueOf;
 
@@ -96,27 +96,110 @@ function hashString(string: string): number {
   return smi(hashed);
 }
 
-// Per-process seed for the secondary collision hash. Never exposed nor
+// Per-process seeds for the secondary collision hash. Never exposed nor
 // serialized, so the public `hash()` stays deterministic. An odd base in
 // [3, 2^20) keeps `base * h` exact as a double (no `Math.imul`).
 const COLLISION_HASH_BASE =
   ((Math.random() * 0x100000) | 1) % 0x100000 || 0x9e37;
+const COLLISION_HASH_SEED = (Math.random() * 0x100000000) | 0;
 
-// Secondary hash to index entries within a `HashCollisionNode`, where every key
-// shares the same primary `hash()`. Using a different, seeded base scatters
-// crafted collision families (e.g. "Aa"/"BB", which only collide under base 31)
-// that an attacker cannot precompute without the seed. It only narrows
-// candidates — `is()` still decides equality — so non-string keys can safely
-// fall back to the (here constant) primary hash and a linear scan.
+/**
+ * Secondary hash used to index the entries of a `HashCollisionNode`, where
+ * every key already shares the same primary `hash()`. It must satisfy
+ * `is(a, b) ⇒ hashCollisionKey(a) === hashCollisionKey(b)`, and should scatter
+ * keys that only collide under the public, deterministic `hash()`, which an
+ * attacker can precompute (hash-flooding, CWE-407).
+ *
+ * The secondary hash is seeded per process, so colliding families cannot be
+ * crafted without the seed. It only narrows candidates — `is()` still decides
+ * equality — so a constant result is always safe, merely slower.
+ *
+ * - strings: a polynomial hash over the characters with a seeded base.
+ * - numbers (and bigints, Dates or any other `valueOf()`-based value): a seeded
+ *   mix of the IEEE-754 bits, which the primary `hashNumber()` folds coarsely.
+ * - Immutable collections and Records: a structural hash built from the
+ *   secondary hashes of their contents (`__collisionHashCode()`).
+ * - any other value object: there is no entropy beyond its own `hashCode()`,
+ *   which is constant inside a collision bucket, so it falls back to a linear
+ *   scan. A `hashCode()` that maps many distinct, externally-controlled values
+ *   to one number is a weakness of that `hashCode()` and cannot be fixed here.
+ */
 export function hashCollisionKey(key: unknown): number {
-  if (typeof key !== 'string') {
-    return hash(key);
+  switch (typeof key) {
+    case 'string':
+      return hashCollisionString(key);
+    case 'number':
+      return hashCollisionNumber(key);
+    case 'bigint':
+      return hashCollisionString(key.toString());
+    case 'object':
+    case 'function': {
+      if (key === null) {
+        return hash(key);
+      }
+      const valueObject = key as {
+        hashCode?: unknown;
+        __collisionHashCode?: () => number;
+      };
+      if (typeof valueObject.hashCode === 'function') {
+        return typeof valueObject.__collisionHashCode === 'function'
+          ? valueObject.__collisionHashCode()
+          : hash(key);
+      }
+      // Like `hash()`, unwrap one level of `valueOf()` (Date, Number, custom
+      // wrappers): `is()` then compares the primitives. Anything else is
+      // compared by identity, which `hash()` already scatters.
+      const v = valueOf(key);
+      switch (typeof v) {
+        case 'string':
+        case 'number':
+        case 'bigint':
+          return hashCollisionKey(v);
+        default:
+          return hash(key);
+      }
+    }
+    default:
+      // boolean, symbol, undefined: too few values to collide, or identity.
+      return hash(key);
   }
+}
+
+function hashCollisionString(string: string): number {
   let hashed = 0;
-  for (let ii = 0; ii < key.length; ii++) {
-    hashed = (COLLISION_HASH_BASE * hashed + key.charCodeAt(ii)) | 0;
+  for (let ii = 0; ii < string.length; ii++) {
+    hashed = (COLLISION_HASH_BASE * hashed + string.charCodeAt(ii)) | 0;
   }
   return hashed;
+}
+
+// Views over one 8-byte buffer to read the IEEE-754 bits of a number.
+const float64View =
+  typeof Float64Array === 'function' ? new Float64Array(1) : undefined;
+const int32View =
+  float64View !== undefined ? new Int32Array(float64View.buffer) : undefined;
+
+function hashCollisionNumber(n: number): number {
+  // NaN is a single key but has no canonical bit pattern.
+  if (n !== n || float64View === undefined || int32View === undefined) {
+    return hash(n);
+  }
+  // `is(0, -0)` is true, but their sign bits differ.
+  float64View[0] = n === 0 ? 0 : n;
+  return mixCollisionHash(
+    mixCollisionHash(int32View[0] as number) ^ (int32View[1] as number)
+  );
+}
+
+// Seeded 32-bit finalizer (MurmurHash3 fmix32 over `h ^ seed`).
+function mixCollisionHash(h: number): number {
+  h = imul(h ^ COLLISION_HASH_SEED, 0xcc9e2d51);
+  h = imul((h << 15) | (h >>> 17), 0x1b873593);
+  h ^= h >>> 16;
+  h = imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = imul(h, 0xc2b2ae35);
+  return h ^ (h >>> 16);
 }
 
 function hashSymbol(sym: symbol): number {
