@@ -1,5 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
-import { List, Map, Record, Set, fromJS, hash, is } from 'immutable';
+import {
+  List,
+  Map,
+  Record as ImmutableRecord,
+  Set,
+  fromJS,
+  hash,
+  is,
+} from 'immutable';
 
 /**
  * Generates `2 ** rounds` distinct strings that all share the same
@@ -40,7 +48,7 @@ describe('Map hash collisions', () => {
     const keys = collisionKeys(11); // 2048 keys, well above the index threshold
 
     it('stores and retrieves every colliding key (built from an object)', () => {
-      const obj: { [key: string]: number } = {};
+      const obj: Record<string, number> = {};
       keys.forEach((k, i) => (obj[k] = i));
       const map = Map(obj);
 
@@ -147,7 +155,7 @@ describe('Map hash collisions', () => {
 
   it('merge() and mergeDeep() work with colliding keys', () => {
     const keys = collisionKeys(11); // 2048 colliding
-    const userObj: { [key: string]: number } = {};
+    const userObj: Record<string, number> = {};
     keys.forEach((k, i) => (userObj[k] = i));
 
     const merged = Map({ existing: -1 }).merge(userObj);
@@ -307,7 +315,7 @@ describe('Map hash collisions', () => {
 
     it('handles Records used as keys that collide', () => {
       const strs = collisionKeys(11); // 2048 colliding strings
-      const Person = Record({ name: '', age: 0 });
+      const Person = ImmutableRecord({ name: '', age: 0 });
       const records = strs.map((s) => Person({ name: s }));
       expect(records.every((r) => hash(r) === hash(records[0]!))).toBe(true);
 
@@ -326,7 +334,7 @@ describe('Map hash collisions', () => {
       const strs = collisionKeys(8); // 256 colliding strings
       // Equality ignores `extra`, so a structural secondary hash would be
       // wrong: the lookup must still find the entry.
-      class Loose extends Record({ name: '', extra: 0 }) {
+      class Loose extends ImmutableRecord({ name: '', extra: 0 }) {
         override equals(other: unknown): boolean {
           return other instanceof Loose && other.name === this.name;
         }
@@ -363,7 +371,7 @@ describe('Map hash collisions', () => {
     // A regression guard: with the linear scan this is ~O(n²) and takes seconds
     // for 16384 keys; with the seeded index it is ~linear and near-instant.
     const keys = collisionKeys(14); // 16384 colliding keys
-    const obj: { [key: string]: number } = {};
+    const obj: Record<string, number> = {};
     keys.forEach((k, i) => (obj[k] = i));
 
     const map = Map(obj);
